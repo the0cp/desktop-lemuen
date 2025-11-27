@@ -3,6 +3,9 @@ extends Node2D
 var window: Window
 const BASE_WIDTH = 300 
 const BASE_HEIGHT = 280 
+const LINE_STEP = 10 
+const MAX_DIALOG_HEIGHT = 70
+const MIN_DIALOG_HEIGHT = 10
 
 var fractional_overflow = Vector2.ZERO 
 
@@ -22,6 +25,8 @@ var taskbar_hider_node = null
 var dialog_panel: PanelContainer
 var dialog_label: Label
 var dialog_timer: Timer
+var dialog_scroll: ScrollContainer
+var scroll_tween: Tween 
 
 @onready var pet = $LemuenPet
 
@@ -77,6 +82,39 @@ func _ready():
 	_setup_system_tray()
 	_setup_dialog_ui()
 
+func _input(event):
+	if dialog_panel.visible and dialog_panel.get_global_rect().has_point(get_viewport().get_mouse_position()):
+		if event is InputEventMouseButton:
+			if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+				dialog_scroll.scroll_vertical -= LINE_STEP
+			elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+				dialog_scroll.scroll_vertical += LINE_STEP
+
+func scroll_to_bottom():
+	if scroll_tween and scroll_tween.is_valid() and scroll_tween.is_running():
+		scroll_tween.kill()
+	
+	await get_tree().process_frame
+	
+	if dialog_scroll and is_instance_valid(dialog_scroll):
+		var v_bar = dialog_scroll.get_v_scroll_bar()
+		if v_bar and is_instance_valid(v_bar):
+			var target_scroll = v_bar.max_value
+			var current_scroll = dialog_scroll.scroll_vertical
+			
+			if abs(target_scroll - current_scroll) < 1.0:
+				dialog_scroll.scroll_vertical = target_scroll
+				return
+
+			scroll_tween = create_tween()
+			scroll_tween.set_ease(Tween.EASE_OUT)
+			scroll_tween.set_trans(Tween.TRANS_QUAD)
+			
+			var duration = 2 + min(abs(target_scroll - current_scroll) / 100.0, 3.0) 
+
+			scroll_tween.tween_property(dialog_scroll, "scroll_vertical", target_scroll, duration)
+			await scroll_tween.finished
+
 func _setup_system_tray():
 	context_menu = PopupMenu.new()
 	context_menu.add_item("Exit", 0)
@@ -97,9 +135,30 @@ func _setup_dialog_ui():
 	dialog_panel = PanelContainer.new()
 	dialog_label = Label.new()
 	dialog_timer = Timer.new()
+	dialog_scroll = ScrollContainer.new()
+	
+	dialog_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	
+	var empty_style = StyleBoxFlat.new()
+	empty_style.set_bg_color(Color(0, 0, 0, 0))
+	empty_style.content_margin_top = 0
+	empty_style.content_margin_bottom = 0
+	empty_style.content_margin_left = 0
+	empty_style.content_margin_right = 0
+	
+	dialog_scroll.add_theme_stylebox_override("scroll_v", empty_style)
+	dialog_scroll.add_theme_stylebox_override("scroll_h", empty_style)
+	
+	dialog_scroll.add_theme_stylebox_override("grabber", empty_style)
+	dialog_scroll.add_theme_stylebox_override("grabber_pressed", empty_style)
+	dialog_scroll.add_theme_stylebox_override("grabber_highlight", empty_style)
+	
+	dialog_scroll.add_theme_constant_override("grabber_min_size", 0)
+	dialog_scroll.add_theme_constant_override("scroll_v_separation", 0)
 	
 	add_child(dialog_panel)
-	dialog_panel.add_child(dialog_label)
+	dialog_panel.add_child(dialog_scroll)
+	dialog_scroll.add_child(dialog_label)
 	add_child(dialog_timer)
 	
 	var style = StyleBoxFlat.new()
@@ -185,19 +244,35 @@ func _on_pet_clicked():
 	dialog_label.text = txt
 	
 	dialog_label.add_theme_font_size_override("font_size", 12)
-	
-	if txt.length() > 25:
-		dialog_label.custom_minimum_size.x = 220
-		dialog_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	else:
-		dialog_label.custom_minimum_size.x = 0
-		dialog_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	dialog_label.custom_minimum_size.x = 220
+	dialog_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	
 	dialog_panel.size = Vector2.ZERO
+	await get_tree().process_frame 
+	
+	dialog_label.set_deferred("size", Vector2.ZERO)
+	await get_tree().process_frame 
+	await get_tree().process_frame 
+	
+	var required_height = dialog_label.get_minimum_size().y
+	
+	var final_height = max(required_height, MIN_DIALOG_HEIGHT) 
+	final_height = min(final_height, MAX_DIALOG_HEIGHT)
+	
+	var style: StyleBoxFlat = dialog_panel.get_theme_stylebox("panel")
+	var style_margin_y = style.content_margin_top + style.content_margin_bottom
+	
+	dialog_panel.custom_minimum_size.y = final_height + style_margin_y
+	
 	dialog_panel.position.x = (BASE_WIDTH - dialog_panel.size.x) / 2.0
 	dialog_panel.position.y = 20
 	
+	dialog_scroll.scroll_vertical = 0
+	
 	dialog_panel.visible = true
+	await get_tree().process_frame 
+	await scroll_to_bottom()
+	
 	dialog_timer.start(3.5)
 	
 func _on_pet_right_clicked():
