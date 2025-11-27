@@ -86,9 +86,9 @@ func _setup_system_tray():
 	tray_icon = StatusIndicator.new()
 	add_child(tray_icon)
 	
-	var anim_sprite = pet.get_node("AnimatedSprite2D")
-	if anim_sprite and anim_sprite.sprite_frames.has_animation("relax"):
-		tray_icon.icon = anim_sprite.sprite_frames.get_frame_texture("relax", 0)
+	var tex = load("res://icon.png")
+	if tex:
+		tray_icon.icon = tex
 	
 	tray_icon.tooltip = "Lemuen"
 	tray_icon.menu = context_menu.get_path()
@@ -205,7 +205,7 @@ func _on_pet_right_clicked():
 		context_menu.position = Vector2i(DisplayServer.mouse_get_position())
 		context_menu.popup()
 
-func _on_pet_state_changed(state_name):
+func _on_pet_state_changed(_state_name):
 	pass
 
 func _notification(what):

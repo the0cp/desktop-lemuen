@@ -12,8 +12,10 @@ config_version=5
 
 config/name="desktop_lemuen"
 run/main_scene="uid://jpi8ubgk5rva"
-config/features=PackedStringArray("4.5", "Forward Plus")
-config/icon="res://icon.svg"
+config/features=PackedStringArray("4.5", "C#", "Forward Plus")
+boot_splash/bg_color=Color(0, 0, 0, 0)
+boot_splash/image="uid://c55ry6t36bt5b"
+config/icon="uid://ls3yhycmecuq"
 
 [display]
 
