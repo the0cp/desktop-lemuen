@@ -2,7 +2,7 @@ extends Node2D
 
 var window: Window
 const BASE_WIDTH = 300 
-const BASE_HEIGHT = 200
+const BASE_HEIGHT = 280 
 
 var fractional_overflow = Vector2.ZERO 
 
@@ -10,12 +10,18 @@ var polygon_cache = {}
 var last_frame_index = -1
 var last_animation_name = ""
 var last_flip_h = false
+var last_ui_visible = false
+var last_ui_size = Vector2.ZERO
 
 var taskbar_height = 0 
 
 var tray_icon: StatusIndicator
 var context_menu: PopupMenu
 var taskbar_hider_node = null
+
+var dialog_panel: PanelContainer
+var dialog_label: Label
+var dialog_timer: Timer
 
 @onready var pet = $LemuenPet
 
@@ -69,6 +75,7 @@ func _ready():
 
 	taskbar_hider_node = get_node_or_null("TaskbarManager")
 	_setup_system_tray()
+	_setup_dialog_ui()
 
 func _setup_system_tray():
 	context_menu = PopupMenu.new()
@@ -85,6 +92,32 @@ func _setup_system_tray():
 	
 	tray_icon.tooltip = "Lemuen"
 	tray_icon.menu = context_menu.get_path()
+
+func _setup_dialog_ui():
+	dialog_panel = PanelContainer.new()
+	dialog_label = Label.new()
+	dialog_timer = Timer.new()
+	
+	add_child(dialog_panel)
+	dialog_panel.add_child(dialog_label)
+	add_child(dialog_timer)
+	
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.15, 0.15, 0.15, 0.8)
+	style.set_corner_radius_all(8)
+	style.content_margin_left = 12
+	style.content_margin_right = 12
+	style.content_margin_top = 8
+	style.content_margin_bottom = 8
+	dialog_panel.add_theme_stylebox_override("panel", style)
+	
+	dialog_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	dialog_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	
+	dialog_panel.visible = false
+	
+	dialog_timer.one_shot = true
+	dialog_timer.timeout.connect(func(): dialog_panel.visible = false)
 
 func _on_menu_item_pressed(id):
 	if id == 0:
@@ -130,7 +163,42 @@ func _on_pet_drag_requested(delta_x):
 		window.position = new_pos
 
 func _on_pet_clicked():
-	pass
+	var quotes = [
+		"ドクター、この部屋を執務室にする時にちゃんと調べたの？あなたを狙撃できる場所が船上に一ヶ所あるわよ。どこって？教えてあげたら、そこを私のプライベートルームにしてくれる？",
+		"こんなに長く一緒に働いてきたのに、どうして今日までこの儀式を先送りにしてたの？忙しすぎて手が回らなかったのなら、私を頼ってくれればよかったのに。",
+		"紹介はいい。各員の情報はインプット済みよ。",
+		"ドクター、今日はどんなところに行ってきたの？",
+		"患者の収容に関する規定の再検討に、医薬品の共同開発に関する書類へのサインもお願い。移動区画の引き渡しに関しては私の提案をもう一度見直して……えっ、笑顔が怖い？そう思ったなら、頑張ってさっさと仕事を終わらせないとね？",
+		"部屋間違いじゃないわ、ここがあなたの執務室よ。リフォームに加えて、ピストルクラッカーと聖典プロジェクターボールもおまけに付けておいたからね。エルが銃でポップコーンを作ろうとして執務室を爆破したからだろって……それはそうだけど、ラテラーノでは「痕跡の残ってない爆発はノーカウント」って言葉があるの。",
+		"私の署名を見つけた？ああ、『植物学総論』ね。確かに寄稿したわ。仕事でじゃなくて、寝たきりの間に色んなお花が届きすぎたからかな。モスティマが一番バタバタしてた時なんか、花の咲いたジャガイモまで持ってくる始末だったのよ。そうやっていつも花に囲まれてたから、詳しくならない方が難しいでしょ。",
+		"手の擦り傷？ああ、何人か小突いただけよ。外回りで出会う人がみんな怪我人を思い遣ってくれるとは限らないでしょう。それでフィアメッタがカンカンに怒っちゃったから、私も「ほどほどに」懲らしめてあげたの。私がなんとも思わなくたって、友達にまで気にするなって無理強いはできないからね。",
+		"枢機卿の業務ガイドはアップルパイ三つ分くらい分厚いけど、実際やってみたらそんなに複雑じゃないのよ。ラテラーノに来たばかりの人が順応できてるかとか、修道院にいる人への安全配慮は行き届いてるのかとかの確認くらいで……ほら、こういうのがなければ、今のラテラーノをラテラーノたらしめてるものがなくなっちゃうでしょ？",
+		"アイスミルクよし、りんごの気付け薬よし、アイマスクも耳栓も全部よし。そろそろ入場だからちゃんと持っていってね。私の好きな映画が気になるって言ったのはそっちでしょ。『聖戒破壊者』シリーズはどれも最高だけど、万が一あなたにスプラッター耐性がなかった場合に備えとかないと、でしょ？",
+		"目を逸らさなくてもいいのよ、ドクター。車椅子からまだ離れられないのは事実だし、すぐには癒えない傷だってあるけど……どうしても可哀想に思うのなら、自律作業プラットフォームの使用権限を全部私に解放してくれない？移動用かレース用かって？それはまあいいじゃない。",
+		"人の視線には敏感なの？ごめんなさい、常に周りの人を観察するのがクセになっちゃってて。じっくり観察してやっと、その人を排除しないといけない理由、あるいは守るべき理由が見えてくるの。自分はどちら側か気になる？安心して仕事に打ち込んでいいわよ、ドクター。",
+		"ん？ただこの窓に落ちた影を眺めてただけ。寝たきりの時期にできた習慣みたいなものよ。この影、何に見えると思う？",
+		"はじめまして、ドクター。私のことはレミュアンでいいわ。さて、まずは第七庁の枢機卿と仕事の話をするか、それともエルの姉にあの子の職場を案内するか、どちらを選ぶかはあなた次第よ。",
+		"このシーン、流血表現をカットしちゃってるわよね？"
+	]
+	
+	var txt = quotes.pick_random()
+	dialog_label.text = txt
+	
+	dialog_label.add_theme_font_size_override("font_size", 12)
+	
+	if txt.length() > 25:
+		dialog_label.custom_minimum_size.x = 220
+		dialog_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	else:
+		dialog_label.custom_minimum_size.x = 0
+		dialog_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	
+	dialog_panel.size = Vector2.ZERO
+	dialog_panel.position.x = (BASE_WIDTH - dialog_panel.size.x) / 2.0
+	dialog_panel.position.y = 20
+	
+	dialog_panel.visible = true
+	dialog_timer.start(3.5)
 	
 func _on_pet_right_clicked():
 	if context_menu:
@@ -138,9 +206,7 @@ func _on_pet_right_clicked():
 		context_menu.popup()
 
 func _on_pet_state_changed(state_name):
-	if state_name == "SIT":
-		if window:
-			pass
+	pass
 
 func _notification(what):
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
@@ -156,15 +222,23 @@ func _update_passthrough_region_precise():
 	var anim_sprite = pet.get_node_or_null("AnimatedSprite2D")
 	if not anim_sprite or not anim_sprite.sprite_frames:
 		return
+	
+	var is_ui_visible = false
+	var ui_size = Vector2.ZERO
+	if dialog_panel and dialog_panel.visible:
+		is_ui_visible = true
+		ui_size = dialog_panel.size
 		
-	if anim_sprite.frame == last_frame_index and anim_sprite.animation == last_animation_name and anim_sprite.flip_h == last_flip_h:
+	if anim_sprite.frame == last_frame_index and anim_sprite.animation == last_animation_name and anim_sprite.flip_h == last_flip_h and is_ui_visible == last_ui_visible and ui_size == last_ui_size:
 		return
 		
 	last_frame_index = anim_sprite.frame
 	last_animation_name = anim_sprite.animation
 	last_flip_h = anim_sprite.flip_h
+	last_ui_visible = is_ui_visible
+	last_ui_size = ui_size
 	
-	var cache_key = last_animation_name + str(last_frame_index) + str(last_flip_h)
+	var cache_key = last_animation_name + str(last_frame_index) + str(last_flip_h) + str(last_ui_visible) + str(last_ui_size)
 	
 	if polygon_cache == null:
 		polygon_cache = {}
@@ -208,7 +282,14 @@ func _update_passthrough_region_precise():
 			transformed_point *= scale_vec
 			transformed_point += center_pos
 			all_points.append(transformed_point)
-			
+
+	if is_ui_visible:
+		var r = dialog_panel.get_rect()
+		all_points.append(r.position)
+		all_points.append(r.position + Vector2(r.size.x, 0))
+		all_points.append(r.position + r.size)
+		all_points.append(r.position + Vector2(0, r.size.y))
+
 	if all_points.size() == 0:
 		return
 
