@@ -51,3 +51,29 @@ scons platform=windows target=template_release custom_api_file=extension_api.jso
 ```
 
 ***Restart the Godot Editor*** to load the GDExtension.
+
+## Building Custom Export Templates (Windows)
+
+Clone godot source:
+
+```bash
+git clone --depth 1 --branch 4.5-stable https://github.com/godotengine/godot.git
+```
+
+Place the optimization configuration file `custom.py` into the root of the `godot/` directory.
+
+compile with MSVC:
+
+```bash
+scons platform=windows target=template_release arch=x86_64
+```
+
+Although MSVC separates debug symbols into PDB files by default, running `strip` can sometimes remove residual headers or sections if you have the tool available:
+
+```bash
+strip bin/godot.windows.template_release.x86_64.exe
+```
+
+In the Option tab, set the Release path to your newly compiled `.exe`.
+
+UPX compression is not recommanded.
