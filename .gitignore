@@ -19,3 +19,4 @@ mono_crash.*.json
 export_presets.cfg
 *.dblite
 /build
+/godot
